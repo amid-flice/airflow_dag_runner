@@ -1,0 +1,1 @@
+pyinstaller --upx-dir "C:\Program Files\upx-4.2.4-win64" --clean main.spec
