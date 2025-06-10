@@ -2,11 +2,16 @@ import requests
 import time
 
 
+def list_of_str(arg):
+    return arg.split(',')
+
+
 class AirflowDagRunner:
     _API_DAGS_URI = 'api/v2/dags'
 
-    def __init__(self, airflow_url, username, password):
+    def __init__(self, airflow_url: str, username: str, password: str, log_sources: list[str]):
         self.airflow_url = airflow_url.rstrip('/')
+        self.log_sources = log_sources
         self.session = requests.Session()
         self.access_token = self._get_access_token(username, password)
         self.session.headers.update({
@@ -93,7 +98,7 @@ class AirflowDagRunner:
             log_resp = self.session.get(log_url, params={"full_content": True})
             log_resp.raise_for_status()
             log_content = log_resp.json().get("content", "Логи отсутствуют")
-            filtered_logs = [r for r in log_content if r.get("logger") in ["root", "task"]
+            filtered_logs = [r for r in log_content if r.get("logger") in self.log_sources
                              and (not cutoff or r.get('timestamp') > cutoff)]
             for log_item in filtered_logs:
                 print(f"{log_item['timestamp']} - {task_id}: [{log_item['level'].upper()}] {log_item['event']}")
@@ -111,10 +116,12 @@ if __name__ == "__main__":
     parser.add_argument("--user", required=True, help="Airflow username")
     parser.add_argument("--password", required=True, help="Airflow password")
     parser.add_argument("--interval", type=int, default=5, help="Status check interval in seconds")
+    parser.add_argument("--log_sources", type=list_of_str, default="root,task",
+                        help="Names of log sources, separated by comma without spaces.")
     args = parser.parse_args()
 
     try:
-        runner = AirflowDagRunner(args.url, args.user, args.password)
+        runner = AirflowDagRunner(args.url, args.user, args.password, args.log_sources)
         dag_run_id = runner.trigger_dag(args.dag)
         print(f"DAG Run ID: {dag_run_id}")
         runner.monitor_dag(args.dag, dag_run_id, args.interval)
