@@ -98,10 +98,23 @@ class AirflowDagRunner:
             log_resp = self.session.get(log_url, params={"full_content": True})
             log_resp.raise_for_status()
             log_content = log_resp.json().get("content", "Логи отсутствуют")
-            filtered_logs = [r for r in log_content if r.get("logger") in self.log_sources
+            filtered_logs = [r for r in log_content if not self.log_sources or r.get("logger") in self.log_sources
                              and (not cutoff or r.get('timestamp') > cutoff)]
             for log_item in filtered_logs:
-                print(f"{log_item['timestamp']} - {task_id}: [{log_item['level'].upper()}] {log_item['event']}")
+                ts = log_item['timestamp']
+                event = log_item.get('event')
+                level = log_item.get('level')
+
+                error_detail = None
+                try:
+                    error_detail = log_item['error_detail'][0]['exc_value']
+                except (IndexError, KeyError, TypeError):
+                    pass
+
+                msg = f"{event}: {error_detail}" \
+                    if level.lower() == 'error' and error_detail \
+                    else event
+                print(f"{ts} - {task_id}: [{level.upper()}] {msg}")
             return filtered_logs[-1]['timestamp'] if filtered_logs else cutoff
         except Exception as e:
             print(f"Не удалось получить логи для задачи {task_id}: {str(e)}")
